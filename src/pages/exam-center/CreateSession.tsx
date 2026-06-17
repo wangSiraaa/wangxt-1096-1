@@ -8,14 +8,17 @@ const levels = Array.from({ length: 10 }, (_, i) => i + 1)
 
 export default function CreateSession() {
   const navigate = useNavigate()
-  const addSession = useExamStore((s) => s.addSession)
+  const { addSession, venues } = useExamStore()
   const [form, setForm] = useState({
     level: 1,
     examDate: '',
     examTime: '09:00',
     maxSlots: 30,
+    waitlistSlots: 10,
     fee: 200,
     status: 'open' as const,
+    venueId: venues[0]?.id || null,
+    venue: venues[0] || null,
     createdBy: '考点管理员',
   })
 

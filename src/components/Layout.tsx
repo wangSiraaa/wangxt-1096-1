@@ -12,6 +12,9 @@ const navItems: Record<Role, { label: string; icon: React.ReactNode; path: strin
     { label: '场次管理', icon: <Building2 size={18} />, path: '/exam-center' },
     { label: '成绩发布', icon: <Gavel size={18} />, path: '/exam-center/scores' },
   ],
+  exam: [
+    { label: '考点管理', icon: <Building2 size={18} />, path: '/exam' },
+  ],
   candidate: [
     { label: '浏览场次', icon: <Home size={18} />, path: '/candidate' },
     { label: '我的报名', icon: <User size={18} />, path: '/candidate/my-registrations' },
@@ -23,6 +26,7 @@ const navItems: Record<Role, { label: string; icon: React.ReactNode; path: strin
 
 const roleLabels: Record<Role, string> = {
   'exam-center': '考点管理',
+  exam: '考点管理',
   candidate: '考生',
   judge: '评委',
 }

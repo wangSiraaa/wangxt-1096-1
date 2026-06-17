@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Home from '@/pages/Home'
-import ExamCenter from '@/pages/exam-center/ExamCenter'
+import ExamCenter from '@/pages/exam/ExamCenter'
 import CreateSession from '@/pages/exam-center/CreateSession'
 import ScorePublish from '@/pages/exam-center/ScorePublish'
 import CandidateHome from '@/pages/candidate/CandidateHome'
@@ -14,6 +14,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/exam" element={<ExamCenter />} />
         <Route path="/exam-center" element={<ExamCenter />} />
         <Route path="/exam-center/create" element={<CreateSession />} />
         <Route path="/exam-center/scores" element={<ScorePublish />} />
