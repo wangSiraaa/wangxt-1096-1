@@ -10,11 +10,12 @@ interface ScoreState {
   updateScore: (id: string, updates: Partial<Score>) => void
   requestReview: (scoreId: string, reason: string) => ReviewRecord | null
   completeReview: (reviewId: string, finalScore: number, reviewJudgeName: string, approved: boolean) => void
-  publishScores: (sessionId: string) => void
+  publishScores: (sessionId: string) => { publishedCount: number; skippedCount: number }
   getPendingReviews: () => Score[]
   getBorderlineScores: (sessionId?: string) => Score[]
   getReviewsByRegistrationId: (registrationId: string) => ReviewRecord[]
   getReviewsByScoreId: (scoreId: string) => ReviewRecord[]
+  getPublishableScores: (sessionId: string) => Score[]
 }
 
 export const useScoreStore = create<ScoreState>()(
@@ -155,8 +156,15 @@ export const useScoreStore = create<ScoreState>()(
       publishScores: (sessionId) => {
         const { useRegistrationStore } = require('./useRegistrationStore')
         const registrationStore = useRegistrationStore.getState()
+        const { useExamStore } = require('./useExamStore')
+        const examStore = useExamStore.getState()
         
-        const sessionScores = get().scores.filter(s => s.sessionId === sessionId)
+        const sessionScores = get().scores.filter(
+          s => s.sessionId === sessionId && s.reviewStatus !== 'pending'
+        )
+        const skippedCount = get().scores.filter(
+          s => s.sessionId === sessionId && s.reviewStatus === 'pending'
+        ).length
         
         sessionScores.forEach(score => {
           registrationStore.addTimelineEvent(score.registrationId, {
@@ -170,9 +178,22 @@ export const useScoreStore = create<ScoreState>()(
         
         set((state) => ({
           scores: state.scores.map((s) =>
-            s.sessionId === sessionId ? { ...s, published: true } : s
+            s.sessionId === sessionId && s.reviewStatus !== 'pending'
+              ? { ...s, published: true }
+              : s
           ),
         }))
+        
+        if (sessionScores.length > 0 && skippedCount === 0) {
+          examStore.updateSession(sessionId, { status: 'finished' })
+        }
+        
+        return { publishedCount: sessionScores.length, skippedCount }
+      },
+      getPublishableScores: (sessionId) => {
+        return get().scores.filter(
+          s => s.sessionId === sessionId && s.reviewStatus !== 'pending'
+        )
       },
       getPendingReviews: () => {
         return get().scores.filter(s => s.reviewStatus === 'pending')

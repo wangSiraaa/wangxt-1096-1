@@ -29,6 +29,10 @@ export default function ScoreEntry() {
   const [compareVersions, setCompareVersions] = useState<{v1: WorkVersion; v2: WorkVersion} | null>(null)
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [reviewReason, setReviewReason] = useState('')
+  const [showReviewProcessModal, setShowReviewProcessModal] = useState(false)
+  const [reviewJudgeName, setReviewJudgeName] = useState('')
+  const [reviewFinalScore, setReviewFinalScore] = useState(0)
+  const [pendingReview, setPendingReview] = useState<typeof reviews[0] | null>(null)
 
   const borderlineCheck = useMemo(() => isBorderlineScore(scoreValue), [scoreValue])
   const workVersions = reg?.workVersions || []
@@ -93,6 +97,26 @@ export default function ScoreEntry() {
       setCompareVersions({ v1: version1, v2: version2 })
       setShowVersionCompare(true)
     }
+  }
+
+  const handleOpenReviewProcess = (review: typeof reviews[0]) => {
+    setPendingReview(review)
+    setReviewJudgeName('')
+    setReviewFinalScore(review.initialScore)
+    setShowReviewProcessModal(true)
+  }
+
+  const handleCompleteReview = (approved: boolean) => {
+    if (!pendingReview || !reviewJudgeName.trim()) return
+    useScoreStore.getState().completeReview(
+      pendingReview.id,
+      reviewFinalScore,
+      reviewJudgeName,
+      approved
+    )
+    setShowReviewProcessModal(false)
+    setPendingReview(null)
+    setReviewJudgeName('')
   }
 
   const result = getScoreResult(scoreValue)
@@ -288,7 +312,15 @@ export default function ScoreEntry() {
                         ) : review.status === 'rejected' ? (
                           <XCircle className="text-red-500 shrink-0" size={20} />
                         ) : (
-                          <Clock className="text-amber-500 shrink-0" size={20} />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleOpenReviewProcess(review)}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-lg transition-colors"
+                            >
+                              办理复核
+                            </button>
+                            <Clock className="text-amber-500 shrink-0" size={20} />
+                          </div>
                         )}
                       </div>
                     </div>
@@ -520,6 +552,120 @@ export default function ScoreEntry() {
                   className="px-4 py-2 text-sm font-medium bg-amber-500 hover:bg-amber-600 disabled:bg-ink-200 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   确认发起复核
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReviewProcessModal && pendingReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-fade-in-up">
+            <div className="p-6 border-b border-ink-200">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif font-bold text-lg text-ink-900">
+                  办理成绩复核
+                </h3>
+                <button
+                  onClick={() => { setShowReviewProcessModal(false); setPendingReview(null) }}
+                  className="text-dai-400 hover:text-ink-600"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-dai-500">考生</p>
+                    <p className="font-medium text-ink-800">{reg.candidateName}</p>
+                  </div>
+                  <div>
+                    <p className="text-dai-500">报考等级</p>
+                    <p className="font-medium text-ink-800">{getLevelName(reg.appliedLevel)}</p>
+                  </div>
+                  <div>
+                    <p className="text-dai-500">初始分数</p>
+                    <p className="font-bold text-ink-800 text-lg">{pendingReview.initialScore} 分</p>
+                  </div>
+                  <div>
+                    <p className="text-dai-500">复核原因</p>
+                    <p className="font-medium text-ink-800">{pendingReview.reason}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink-800 mb-2">
+                  复核评委姓名
+                </label>
+                <input
+                  type="text"
+                  value={reviewJudgeName}
+                  onChange={(e) => setReviewJudgeName(e.target.value)}
+                  placeholder="请输入复核评委姓名"
+                  className="w-full px-3 py-2.5 border border-ink-200 rounded-lg text-sm focus:ring-2 focus:ring-vermilion-300 focus:border-vermilion-400 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink-800 mb-2">
+                  最终成绩（0-100）
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={reviewFinalScore}
+                  onChange={(e) => setReviewFinalScore(parseInt(e.target.value))}
+                  className="w-full h-2 bg-ink-100 rounded-lg appearance-none cursor-pointer accent-vermilion-500"
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-3xl font-bold text-ink-900">{reviewFinalScore}</span>
+                  <span className={`text-lg font-bold ${
+                    getScoreResult(reviewFinalScore) === '优秀' ? 'text-amber-600' :
+                    getScoreResult(reviewFinalScore) === '良好' ? 'text-blue-600' :
+                    getScoreResult(reviewFinalScore) === '合格' ? 'text-green-600' : 'text-vermilion-600'
+                  }`}>
+                    {getScoreResult(reviewFinalScore)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs text-dai-400 mt-1">
+                  <span>0</span>
+                  <span className="text-green-500 font-medium">60 合格</span>
+                  <span className="text-blue-500 font-medium">75 良好</span>
+                  <span className="text-amber-500 font-medium">90 优秀</span>
+                  <span>100</span>
+                </div>
+              </div>
+
+              {isBorderlineScore(reviewFinalScore).isBorderline && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-700">
+                    <AlertTriangle size={12} className="inline mr-1" />
+                    {isBorderlineScore(reviewFinalScore).reason}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => handleCompleteReview(false)}
+                  disabled={!reviewJudgeName.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-ink-100 hover:bg-ink-200 disabled:bg-ink-50 disabled:cursor-not-allowed text-ink-700 rounded-lg font-medium text-sm transition-colors"
+                >
+                  <XCircle size={16} />
+                  驳回（保留原成绩）
+                </button>
+                <button
+                  onClick={() => handleCompleteReview(true)}
+                  disabled={!reviewJudgeName.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 disabled:bg-ink-200 disabled:cursor-not-allowed text-white rounded-lg font-medium text-sm transition-colors"
+                >
+                  <CheckCircle2 size={16} />
+                  通过（更新成绩）
                 </button>
               </div>
             </div>
