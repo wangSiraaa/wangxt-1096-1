@@ -1,0 +1,36 @@
+# ============================================
+# 书法考级报名系统 - docker-compose.yml
+# ============================================
+
+services:
+  calligraphy-exam:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: calligraphy-exam-frontend
+    image: calligraphy-exam:1.0.0
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - calligraphy-network
+    volumes:
+      # 如需自定义Nginx配置，可挂载
+      # - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # 如需挂载自定义证书
+      # - ./certs:/etc/nginx/certs:ro
+      - calligraphy-nginx-cache:/var/cache/nginx
+
+networks:
+  calligraphy-network:
+    driver: bridge
+
+volumes:
+  calligraphy-nginx-cache:
+    driver: local
