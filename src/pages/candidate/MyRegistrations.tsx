@@ -310,7 +310,7 @@ export default function MyRegistrations() {
                         <div className="flex gap-2">
                           {reg.status === 'pending_upload' && (
                             <button
-                              onClick={() => navigate(`/candidate/register/${reg.sessionId}`)}
+                              onClick={() => navigate(`/candidate/register/${reg.sessionId}?phone=${encodeURIComponent(reg.candidatePhone)}`)}
                               className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors"
                             >
                               <Image size={14} /> 上传作品
@@ -318,7 +318,7 @@ export default function MyRegistrations() {
                           )}
                           {reg.status === 'pending_payment' && (
                             <button
-                              onClick={() => navigate(`/candidate/register/${reg.sessionId}`)}
+                              onClick={() => navigate(`/candidate/register/${reg.sessionId}?phone=${encodeURIComponent(reg.candidatePhone)}`)}
                               className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-vermilion-500 hover:bg-vermilion-600 text-white text-sm font-medium rounded-lg transition-colors"
                             >
                               <CreditCard size={14} /> 去缴费

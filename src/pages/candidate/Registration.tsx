@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload, AlertTriangle, CreditCard, Image, CheckCircle2, FileText, Clock, ChevronRight, X, GitCompare } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, Upload, AlertTriangle, CreditCard, Image, CheckCircle2, FileText, Clock, ChevronRight, X, GitCompare, User, Phone } from 'lucide-react'
 import Layout from '@/components/Layout'
 import LevelBadge from '@/components/LevelBadge'
 import { useExamStore } from '@/store/useExamStore'
@@ -9,9 +9,12 @@ import { checkLevelSpan, checkJumpLevelEligibility, getRegistrationStatusText } 
 import type { WorkVersion } from '@/types'
 import ConfirmModal from '@/components/ConfirmModal'
 
+type Step = 'identify' | 'form' | 'upload' | 'pay' | 'done'
+
 export default function Registration() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const fileRef = useRef<HTMLInputElement>(null)
   const { sessions, incrementRegistered, venues } = useExamStore()
   const { addRegistration, addWorkVersion, setPaid, registrations, setCurrentWorkVersion, compareWorkVersions } = useRegistrationStore()
@@ -19,17 +22,16 @@ export default function Registration() {
   const session = sessions.find((s) => s.id === sessionId)
   const venue = session?.venueId ? venues.find(v => v.id === session.venueId) : null
 
-  const existingPendingReg = registrations.find(
-    (r) => r.sessionId === sessionId && (r.status === 'pending_upload' || r.status === 'pending_payment')
-  )
+  const phoneFromParams = searchParams.get('phone') || ''
+
+  const [identifyPhone, setIdentifyPhone] = useState(phoneFromParams)
+  const [identifyError, setIdentifyError] = useState('')
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [passedLevel, setPassedLevel] = useState(0)
-  const [regId, setRegId] = useState<string | null>(existingPendingReg?.id ?? null)
-  const [workPreview, setWorkPreview] = useState<string | null>(
-    existingPendingReg?.workImageBase64 || null
-  )
+  const [regId, setRegId] = useState<string | null>(null)
+  const [workPreview, setWorkPreview] = useState<string | null>(null)
   const [levelWarning, setLevelWarning] = useState<string | null>(null)
   const [showLevelWarning, setShowLevelWarning] = useState(false)
   const [jumpLevelInfo, setJumpLevelInfo] = useState<ReturnType<typeof checkJumpLevelEligibility> | null>(null)
@@ -38,23 +40,77 @@ export default function Registration() {
   const [compareVersions, setCompareVersions] = useState<{v1: number; v2: number} | null>(null)
   const [uploadNote, setUploadNote] = useState('')
   const [showUploadNote, setShowUploadNote] = useState(false)
+  const [identityConfirmed, setIdentityConfirmed] = useState(false)
 
-  const initialStep = existingPendingReg
-    ? existingPendingReg.status === 'pending_upload'
-      ? 'upload'
-      : 'pay'
-    : 'form'
+  const myPendingReg = useMemo(() => {
+    if (!identityConfirmed || !identifyPhone) return null
+    return registrations.find(
+      (r) =>
+        r.sessionId === sessionId &&
+        r.candidatePhone === identifyPhone &&
+        (r.status === 'pending_upload' || r.status === 'pending_payment')
+    )
+  }, [registrations, sessionId, identifyPhone, identityConfirmed])
 
-  const [step, setStep] = useState<'form' | 'upload' | 'pay' | 'done'>(initialStep)
+  const [step, setStep] = useState<Step>('identify')
 
   useEffect(() => {
-    if (existingPendingReg) {
-      setName(existingPendingReg.candidateName)
-      setPhone(existingPendingReg.candidatePhone)
-      setPassedLevel(existingPendingReg.passedLevel)
-      setWorkPreview(existingPendingReg.workImageBase64 || null)
+    if (phoneFromParams && !identityConfirmed) {
+      setIdentifyPhone(phoneFromParams)
+      handleIdentify(phoneFromParams)
     }
-  }, [existingPendingReg])
+  }, [phoneFromParams])
+
+  useEffect(() => {
+    if (myPendingReg) {
+      setName(myPendingReg.candidateName)
+      setPhone(myPendingReg.candidatePhone)
+      setPassedLevel(myPendingReg.passedLevel)
+      setRegId(myPendingReg.id)
+      setWorkPreview(myPendingReg.workImageBase64 || null)
+
+      const nextStep: Step = myPendingReg.status === 'pending_upload' ? 'upload' : 'pay'
+      setStep(nextStep)
+    } else if (identityConfirmed && !myPendingReg) {
+      setStep('form')
+    }
+  }, [myPendingReg, identityConfirmed])
+
+  const handleIdentify = (inputPhone?: string) => {
+    const phoneValue = (inputPhone ?? identifyPhone).trim()
+    if (!phoneValue) {
+      setIdentifyError('请输入手机号以识别身份')
+      return
+    }
+    if (!/^1\d{10}$/.test(phoneValue)) {
+      setIdentifyError('请输入有效的11位手机号')
+      return
+    }
+
+    setIdentifyError('')
+    setIdentityConfirmed(true)
+
+    const existing = registrations.find(
+      (r) =>
+        r.sessionId === sessionId &&
+        r.candidatePhone === phoneValue &&
+        (r.status === 'pending_upload' || r.status === 'pending_payment')
+    )
+
+    if (existing) {
+      setName(existing.candidateName)
+      setPhone(existing.candidatePhone)
+      setPassedLevel(existing.passedLevel)
+      setRegId(existing.id)
+      setWorkPreview(existing.workImageBase64 || null)
+
+      const nextStep: Step = existing.status === 'pending_upload' ? 'upload' : 'pay'
+      setStep(nextStep)
+    } else {
+      setPhone(phoneValue)
+      setStep('form')
+    }
+  }
 
   if (!session) {
     return (
@@ -203,6 +259,17 @@ export default function Registration() {
   const currentReg = regId ? registrations.find(r => r.id === regId) : null
   const workVersions = currentReg?.workVersions || []
 
+  const stepLabels = ['身份确认', '填写信息', '上传作品', '确认缴费', '报名完成']
+  const stepKeys: Step[] = ['identify', 'form', 'upload', 'pay', 'done']
+  const currentStepIndex = stepKeys.indexOf(step)
+
+  const othersPendingCount = registrations.filter(
+    (r) =>
+      r.sessionId === sessionId &&
+      r.candidatePhone !== identifyPhone &&
+      (r.status === 'pending_upload' || r.status === 'pending_payment')
+  ).length
+
   return (
     <Layout role="candidate">
       <div className="max-w-4xl mx-auto">
@@ -240,10 +307,9 @@ export default function Registration() {
 
               <div className="p-6">
                 <div className="flex items-center gap-3 mb-8">
-                  {(['form', 'upload', 'pay', 'done'] as const).map((s, i) => {
-                    const labels = ['填写信息', '上传作品', '确认缴费', '报名完成']
+                  {stepKeys.map((s, i) => {
                     const isActive = step === s
-                    const isDone = ['form', 'upload', 'pay', 'done'].indexOf(step) > i
+                    const isDone = currentStepIndex > i
                     return (
                       <div key={s} className="flex items-center gap-2 flex-1">
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
@@ -252,16 +318,85 @@ export default function Registration() {
                           {isDone ? '✓' : i + 1}
                         </div>
                         <span className={`text-xs ${isActive ? 'text-vermilion-600 font-medium' : isDone ? 'text-green-600' : 'text-dai-400'}`}>
-                          {labels[i]}
+                          {stepLabels[i]}
                         </span>
-                        {i < 3 && <div className={`flex-1 h-0.5 ${isDone ? 'bg-green-400' : 'bg-ink-100'}`} />}
+                        {i < 4 && <div className={`flex-1 h-0.5 ${isDone ? 'bg-green-400' : 'bg-ink-100'}`} />}
                       </div>
                     )
                   })}
                 </div>
 
+                {step === 'identify' && (
+                  <div className="space-y-5">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                      <div className="flex items-start gap-3">
+                        <User className="text-blue-500 shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <p className="font-medium">请先确认您的身份</p>
+                          <p className="mt-1">为保证报名信息安全，请输入您的手机号进行身份识别。系统将根据手机号恢复您本人的草稿报名，不会加载他人数据。</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-ink-800 mb-2">手机号</label>
+                      <div className="flex gap-3">
+                        <div className="flex-1 relative">
+                          <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dai-400" />
+                          <input
+                            type="tel"
+                            value={identifyPhone}
+                            onChange={(e) => { setIdentifyPhone(e.target.value); setIdentifyError('') }}
+                            placeholder="请输入您的手机号"
+                            maxLength={11}
+                            className="w-full pl-10 pr-3 py-2.5 border border-ink-200 rounded-lg text-sm focus:ring-2 focus:ring-vermilion-300 focus:border-vermilion-400 outline-none"
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleIdentify() }}
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleIdentify()}
+                          className="px-6 py-2.5 bg-dai-800 hover:bg-dai-900 text-white rounded-lg text-sm font-medium transition-colors shrink-0"
+                        >
+                          确认身份
+                        </button>
+                      </div>
+                      {identifyError && (
+                        <p className="mt-2 text-sm text-vermilion-600">{identifyError}</p>
+                      )}
+                    </div>
+
+                    {othersPendingCount > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+                          <div>
+                            <p className="text-sm font-medium text-amber-800">该场次有其他考生正在报名</p>
+                            <p className="text-sm text-amber-700 mt-1">当前有 {othersPendingCount} 位其他考生正在进行报名流程。输入您的手机号即可独立报名，互不影响。</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-sm pt-2">
+                      <span className="text-dai-500">
+                        剩余名额：{session.maxSlots - session.registeredCount} / {session.maxSlots}
+                      </span>
+                      {session.waitlistSlots > 0 && (
+                        <span className="text-dai-400">
+                          候补名额：{session.waitlistSlots - session.waitlistCount} / {session.waitlistSlots}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {step === 'form' && (
                   <form onSubmit={handleRegister} className="space-y-5">
+                    <div className="bg-ink-50 border border-ink-200/50 rounded-lg p-4 text-sm text-dai-600 flex items-center gap-2">
+                      <Phone size={16} className="text-dai-400 shrink-0" />
+                      <span>当前身份：{phone}</span>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-ink-800 mb-2">姓名</label>
                       <input
@@ -280,9 +415,10 @@ export default function Registration() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         required
-                        placeholder="请输入手机号"
-                        className="w-full px-3 py-2.5 border border-ink-200 rounded-lg text-sm focus:ring-2 focus:ring-vermilion-300 focus:border-vermilion-400 outline-none"
+                        disabled
+                        className="w-full px-3 py-2.5 border border-ink-200 rounded-lg text-sm bg-ink-50 text-dai-500 cursor-not-allowed"
                       />
+                      <p className="mt-1 text-xs text-dai-400">手机号已在身份确认步骤锁定，不可修改</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-ink-800 mb-2">已通过等级（0=未参加过）</label>
